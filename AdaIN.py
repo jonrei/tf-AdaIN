@@ -31,7 +31,9 @@ def graph_from_t7(net, graph, t7_file):
     :param t7 Path to t7 file to use
     '''
     layers = []
-    t7 = torchfile.load(t7_file)
+
+    # Fix for (unhashable type: 'list') error.
+    t7 = torchfile.load(t7_file,force_8bytes_long=True)
     
     with graph.as_default():
         for module in t7.modules:
@@ -84,6 +86,7 @@ def preprocess_image(image, size=None):
 def postprocess_image(image, size=None):
     return _offset_image(image, -1*_RGB_MEANS)
 
+
 def image_from_file(graph, placeholder_name, size=None):
     with graph.as_default():
         filename = tf.placeholder(tf.string, name=placeholder_name)
@@ -92,7 +95,7 @@ def image_from_file(graph, placeholder_name, size=None):
         image = preprocess_image(image, size)
         return image, filename
 
-def AdaIN(content_features, style_features):
+def AdaIN(content_features, style_features, alpha):
     '''
     Normalizes the `content_features` with scaling and offset from `style_features`.
     See "5. Adaptive Instance Normalization" in https://arxiv.org/abs/1703.06868 for details.
@@ -103,10 +106,13 @@ def AdaIN(content_features, style_features):
     normalized_content_features = tf.nn.batch_normalization(content_features, content_mean,
                                                             content_variance, style_mean, 
                                                             tf.sqrt(style_variance), epsilon)
+
+    normalized_content_features = alpha * normalized_content_features + (1 - alpha) * content_features
+
     return normalized_content_features
     
     
-def stylize(content, style, vgg_t7_file, decode_t7_file, resize=[500,500]):
+def stylize(content, style,alpha,vgg_t7_file, decode_t7_file, resize=[512,512]):
     '''
     :param content Filename for the content image    
     :param style Filename for the style image
@@ -121,7 +127,7 @@ def stylize(content, style, vgg_t7_file, decode_t7_file, resize=[500,500]):
         _, s_vgg = graph_from_t7(s, g, vgg_t7_file)
         c_vgg = c_vgg[30]
         s_vgg = s_vgg[30]
-        stylized_content = AdaIN(c_vgg, s_vgg)
+        stylized_content = AdaIN(c_vgg, s_vgg, alpha)
         c_decoded, _ = graph_from_t7(stylized_content, g, decode_t7_file)
         c_decoded = postprocess_image(c_decoded)
         c = postprocess_image(c)
