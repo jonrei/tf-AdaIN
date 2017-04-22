@@ -2,7 +2,9 @@ import tensorflow as tf
 import numpy as np
 import torchfile
 
+# VGG19 mean values
 _RGB_MEANS = np.array([123.68, 116.78, 103.94])
+_BGR_MEANS = np.array([103.94, 116.78, 123.68])
 
 def any_to_uint8_scale(image):
     '''
@@ -31,8 +33,6 @@ def graph_from_t7(net, graph, t7_file):
     :param t7 Path to t7 file to use
     '''
     layers = []
-
-    # Fix for (unhashable type: 'list') error.
     t7 = torchfile.load(t7_file,force_8bytes_long=True)
     
     with graph.as_default():
@@ -46,7 +46,6 @@ def graph_from_t7(net, graph, t7_file):
                 layers.append(net)
             elif module._typename == b'nn.SpatialConvolution':
                 weight = module.weight.transpose([2,3,1,0])
-                tf.summary.histogram('weight', weight)
                 bias = module.bias
                 strides = [1, module.dH, module.dW, 1]  # Assumes 'NHWC'
                 net = tf.nn.conv2d(net, weight, strides, padding='VALID')
@@ -78,15 +77,28 @@ def _offset_image(image, means):
     return image
     
 def preprocess_image(image, size=None):
-    image = _offset_image(image, _RGB_MEANS)
+    
+    # Nets like VGG trained on images imported from OpenCV are
+    # in BGR order, so we need to flip the channels on the incoming image.
+    # Remove this part if not needed, but for now we assume inputs
+    # are in RGB.
+    # See https://github.com/jcjohnson/neural-style/issues/207 for
+    # further discussion
+    image = tf.reverse(image, axis=[-1])
+    
+    
+    image = _offset_image(image, _BGR_MEANS)
     if size is not None:
         image = tf.image.resize_images(image, size)
     return image
 
 def postprocess_image(image, size=None):
-    return _offset_image(image, -1*_RGB_MEANS)
+    image = _offset_image(image, -1*_BGR_MEANS)
 
-
+    # Flip back to RGB
+    image = tf.reverse(image, axis=[-1])
+    return image
+    
 def image_from_file(graph, placeholder_name, size=None):
     with graph.as_default():
         filename = tf.placeholder(tf.string, name=placeholder_name)
@@ -106,13 +118,11 @@ def AdaIN(content_features, style_features, alpha):
     normalized_content_features = tf.nn.batch_normalization(content_features, content_mean,
                                                             content_variance, style_mean, 
                                                             tf.sqrt(style_variance), epsilon)
-
     normalized_content_features = alpha * normalized_content_features + (1 - alpha) * content_features
-
     return normalized_content_features
     
     
-def stylize(content, style,alpha,vgg_t7_file, decode_t7_file, resize=[512,512]):
+def stylize(content, style, alpha, vgg_t7_file, decode_t7_file, resize=[512,512]):
     '''
     :param content Filename for the content image    
     :param style Filename for the style image
