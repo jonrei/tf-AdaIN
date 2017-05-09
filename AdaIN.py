@@ -3,7 +3,6 @@ import numpy as np
 import torchfile
 
 # VGG19 mean values
-_RGB_MEANS = np.array([123.68, 116.78, 103.94])
 _BGR_MEANS = np.array([103.94, 116.78, 123.68])
 
 def any_to_uint8_scale(image):
@@ -33,10 +32,16 @@ def graph_from_t7(net, graph, t7_file):
     :param t7 Path to t7 file to use
     '''
     layers = []
+    print_layers = []#[0, 30]
     t7 = torchfile.load(t7_file,force_8bytes_long=True)
     
     with graph.as_default():
-        for module in t7.modules:
+
+        for idx, module in enumerate(t7.modules):
+        
+            if idx in print_layers:
+                print(module)
+            
             if module._typename == b'nn.SpatialReflectionPadding':
                 left = module.pad_l
                 right = module.pad_r
@@ -85,8 +90,6 @@ def preprocess_image(image, size=None):
     # See https://github.com/jcjohnson/neural-style/issues/207 for
     # further discussion
     image = tf.reverse(image, axis=[-1])
-    
-    
     image = _offset_image(image, -1*_BGR_MEANS)
     if size is not None:
         image = tf.image.resize_images(image, size)
@@ -128,7 +131,7 @@ def stylize(content, style, alpha, vgg_t7_file, decode_t7_file, resize=[512,512]
     :param style Filename for the style image
     :param vgg_t7_file Filename for the VGG pretrained net
     :param decode_t7_file Filename for the pretrained decoder net
-    :param resize=[500,500] Size the images are resized to. Set to None for no resizing.
+    :param resize=[512,512] Size the images are resized to. Set to None for no resizing.
     '''
     with tf.Graph().as_default() as g, tf.Session(graph=g) as sess, tf.variable_scope(tf.get_variable_scope(), reuse=False) as scope:
         c, c_filename = image_from_file(g, 'content_image', size=resize)
