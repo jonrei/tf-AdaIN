@@ -90,14 +90,14 @@ def preprocess_image(image, size=None):
     # See https://github.com/jcjohnson/neural-style/issues/207 for
     # further discussion
     image = tf.reverse(image, axis=[-1])
-    image = _offset_image(image, -1*_BGR_MEANS)
+    #image = _offset_image(image, -1*_BGR_MEANS)
     if size is not None:
         image = tf.image.resize_images(image, size)
     return image
 
 def postprocess_image(image, size=None):
-    image = _offset_image(image, _BGR_MEANS)
-
+    #image = _offset_image(image, _BGR_MEANS)
+    
     # Flip back to RGB
     image = tf.reverse(image, axis=[-1])
     return image
