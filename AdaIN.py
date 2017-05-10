@@ -91,12 +91,14 @@ def preprocess_image(image, size=None):
     # further discussion
     image = tf.reverse(image, axis=[-1])
     #image = _offset_image(image, -1*_BGR_MEANS)
+    image = tf.cast(image, tf.float32) / 256.0
     if size is not None:
         image = tf.image.resize_images(image, size)
     return image
 
 def postprocess_image(image, size=None):
     #image = _offset_image(image, _BGR_MEANS)
+    image = image * 256
     
     # Flip back to RGB
     image = tf.reverse(image, axis=[-1])
